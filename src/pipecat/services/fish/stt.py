@@ -9,8 +9,9 @@
 import asyncio
 import json
 import re
+import time
 from collections import deque
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from typing import Any, Literal, cast
@@ -520,6 +521,40 @@ class FishAudioSTTService(EagerEndOfTurnSTTServiceMixin, WebsocketSTTService):
     async def _send_keepalive(self, silence: bytes):
         """Keep an idle connection alive without synthesizing input audio."""
         await self._queue_message({"type": "keepalive"})
+
+    async def _receive_until_confirmed(
+        self,
+        messages: AsyncIterator[str | bytes],
+        confirmed: asyncio.Event,
+        handle_message: Callable[[str | bytes], Awaitable[None]],
+        timeout: float,
+    ) -> bool:
+        """Handle messages until the server confirms the connection.
+
+        Args:
+            messages: Connection messages, left positioned after confirmation.
+            confirmed: Event set by the message handler once the session is ready.
+            handle_message: Handles one server message.
+            timeout: Maximum time in seconds to wait for confirmation.
+
+        Returns:
+            True once confirmed, False if the connection closed first.
+
+        Raises:
+            ConnectionError: If the server does not confirm within the timeout.
+        """
+        try:
+            async with asyncio.timeout(timeout):
+                while not confirmed.is_set():
+                    await handle_message(await anext(messages))
+        except StopAsyncIteration:
+            return False
+        except TimeoutError:
+            self._last_connect_time = time.monotonic()
+            raise ConnectionError(
+                f"{self} did not confirm the connection within {timeout}s"
+            ) from None
+        return True
 
     async def _receive_messages(self):
         if self._websocket is None:

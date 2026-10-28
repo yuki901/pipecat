@@ -21,6 +21,7 @@ from websockets.http11 import Response
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     BotStoppedSpeakingFrame,
+    EagerEndOfTurnCancelFrame,
     EagerTranscriptionFrame,
     ErrorFrame,
     InputAudioRawFrame,
@@ -36,7 +37,6 @@ from pipecat.frames.frames import (
     TTSTextFrame,
     UserBackchannelFrame,
     UserStoppedSpeakingFrame,
-    UserTurnResponseCancelFrame,
 )
 from pipecat.metrics.metrics import STTUsageMetricsData
 from pipecat.pipeline.pipeline import Pipeline
@@ -155,7 +155,7 @@ async def test_eager_withdrawal_and_empty_predictions():
     await stt._handle_message({"type": "turn_resumed", "turn_index": 0})
     assert [type(frame) for frame in pushed(stt)] == [
         EagerTranscriptionFrame,
-        UserTurnResponseCancelFrame,
+        EagerEndOfTurnCancelFrame,
     ]
 
 
